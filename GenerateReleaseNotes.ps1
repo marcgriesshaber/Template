@@ -49,15 +49,33 @@
 #>
 
 param(
-    [Parameter(Mandatory = $false)] [string]$ServerUrl = "",
-    [Parameter(Mandatory = $true)] [string]$Project,
-    [Parameter(Mandatory = $false)] [string]$BuildIds = "",
-    [Parameter(Mandatory = $false)] [string]$IncludeTags = "",
-    [Parameter(Mandatory = $false)] [ValidateSet("OR", "AND")] [string]$TagOperator = "OR",
-    [Parameter(Mandatory = $false)] [string]$ExcludeTags = "",
-    [Parameter(Mandatory = $false)] [string]$Pat,
-    [Parameter(Mandatory = $false)] [string]$TemplatePath,
-    [Parameter(Mandatory = $false)] [string]$OutputPath
+    [Parameter(Mandatory=$false)]
+    [string]$ServerUrl = "",
+    
+    [Parameter(Mandatory=$true)]
+    [string]$Project,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$BuildIds = "",
+    
+    [Parameter(Mandatory=$false)]
+    [string]$IncludeTags = "",
+    
+    [Parameter(Mandatory=$false)]
+    [ValidateSet("OR", "AND")]
+    [string]$TagOperator = "OR",
+    
+    [Parameter(Mandatory=$false)]
+    [string]$ExcludeTags = "",
+    
+    [Parameter(Mandatory=$false)]
+    [string]$Pat,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$TemplatePath,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$OutputPath
 )
 
 # Stelle sicher, dass TLS 1.2 verwendet wird
