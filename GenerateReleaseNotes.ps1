@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
   Generiert Release Notes aus den mit einem Build verknüpften Work Items in Azure DevOps (On-Premise).
 
@@ -720,4 +720,5 @@ if ($OutputPath -match "\.md$") {
 }
 $fullHtmlContent | Out-File -FilePath $OutputPathHtml -Encoding UTF8
 Write-Log "HTML Release Notes gespeichert unter '$OutputPathHtml'."
+
 
