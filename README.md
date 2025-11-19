@@ -616,7 +616,6 @@ ReleaseNotes.docx        # Word-Version (wenn Pandoc installiert)
 
 - ✅ Verwenden Sie PAT mit minimalen Berechtigungen (nur Work Items Read)
 - ✅ Speichern Sie PAT niemals im Quellcode
-- ✅ Nutzen Sie Umgebungsvariablen oder Azure Key Vault
 - ✅ Setzen Sie Ablaufdatum für PAT
 
 ### In Azure Pipelines
@@ -632,46 +631,6 @@ steps:
   env:
     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 ```
-
-## 🤝 Beiträge
-
-Contributions sind willkommen! Bitte:
-
-1. Forken Sie das Repository
-2. Erstellen Sie einen Feature-Branch (`git checkout -b feature/AmazingFeature`)
-3. Committen Sie Ihre Änderungen (`git commit -m 'Add AmazingFeature'`)
-4. Pushen Sie zum Branch (`git push origin feature/AmazingFeature`)
-5. Öffnen Sie einen Pull Request
-
-## 📜 Lizenz
-
-Dieses Projekt ist unter der MIT-Lizenz lizenziert - siehe [LICENSE](LICENSE) für Details.
-
-## 👥 Autoren
-
-- **Marc Griesshaber** - *Initial work* - [@marcgriesshaber](https://github.com/marcgriesshaber)
-
-## 🙏 Danksagungen
-
-- Azure DevOps REST API Dokumentation
-- PowerShell Community
-- Pandoc für Dokumenten-Konvertierung
-
-## 📞 Support
-
-Bei Fragen oder Problemen:
-
-- Erstellen Sie ein [Issue](https://github.com/marcgriesshaber/Template/issues)
-- Kontaktieren Sie den Autor
-
-## 🗺️ Roadmap
-
-- [ ] Unterstützung für zusätzliche Work Item-Typen
-- [ ] PDF-Export
-- [ ] Grafische Darstellung der Hierarchie
-- [ ] Email-Versand der Release Notes
-- [ ] Change-Log zwischen Builds
-- [ ] Multi-Language Support
 
 ---
 
