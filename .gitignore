@@ -1,0 +1,22 @@
+# Secrets und sensible Daten
+secrets
+*.pat
+*.token
+
+# Release Notes Output
+ReleaseNotes*.md
+ReleaseNotes*.html
+ReleaseNotes*.docx
+
+# Agent-Konfigurationen
+.github/agents/
+
+# PowerShell temporäre Dateien
+*.ps1.bak
+
+# VS Code
+.vscode/
+
+# Windows
+Thumbs.db
+Desktop.ini
