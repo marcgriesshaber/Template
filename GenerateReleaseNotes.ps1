@@ -49,34 +49,41 @@
 #>
 
 param(
-    [Parameter(Mandatory = $false)]
-    [string]$ServerUrl = "",
+    [Parameter(Mandatory=$false)]
+    [string]$ServerUrl,
     
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory=$true)]
     [string]$Project,
     
-    [Parameter(Mandatory = $false)]
-    [string]$BuildIds = "",
+    [Parameter(Mandatory=$false)]
+    [string]$BuildIds,
     
-    [Parameter(Mandatory = $false)]
-    [string]$IncludeTags = "",
+    [Parameter(Mandatory=$false)]
+    [string]$IncludeTags,
     
-    [Parameter(Mandatory = $false)]
-    [ValidateSet("OR", "AND")]
-    [string]$TagOperator = "OR",
+    [Parameter(Mandatory=$false)]
+    [ValidateSet("OR","AND")]
+    [string]$TagOperator,
     
-    [Parameter(Mandatory = $false)]
-    [string]$ExcludeTags = "",
+    [Parameter(Mandatory=$false)]
+    [string]$ExcludeTags,
     
-    [Parameter(Mandatory = $false)]
+    [Parameter(Mandatory=$false)]
     [string]$Pat,
     
-    [Parameter(Mandatory = $false)]
+    [Parameter(Mandatory=$false)]
     [string]$TemplatePath,
     
-    [Parameter(Mandatory = $false)]
+    [Parameter(Mandatory=$false)]
     [string]$OutputPath
 )
+
+# Setze Standardwerte nach der param-Deklaration
+if ([string]::IsNullOrEmpty($ServerUrl)) { $ServerUrl = "" }
+if ([string]::IsNullOrEmpty($BuildIds)) { $BuildIds = "" }
+if ([string]::IsNullOrEmpty($IncludeTags)) { $IncludeTags = "" }
+if ([string]::IsNullOrEmpty($TagOperator)) { $TagOperator = "OR" }
+if ([string]::IsNullOrEmpty($ExcludeTags)) { $ExcludeTags = "" }
 
 # Stelle sicher, dass TLS 1.2 verwendet wird
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
