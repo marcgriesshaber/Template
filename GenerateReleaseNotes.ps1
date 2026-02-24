@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Generiert Release Notes aus den mit einem Build verknüpften Work Items in Azure DevOps (On-Premise).
 
@@ -187,7 +187,7 @@ function Get-WorkItemsByTags {
     $tagQuery = $tagConditions -join " $Operator "
     
     $wiqlQuery = @{
-        query = "SELECT [System.Id] FROM WorkItems WHERE ($tagQuery) AND [System.TeamProject] = '$ProjectDecoded'"
+        query = "SELECT [System.Id] FROM WorkItems WHERE ($tagQuery) AND [System.TeamProject] = '$ProjectDecoded' AND [System.State] <> 'Removed'"
     } | ConvertTo-Json
     
     $wiqlUrl = "$ServerUrl/$Project/_apis/wit/wiql?api-version=7.0"

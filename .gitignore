@@ -16,6 +16,7 @@ ReleaseNotes*.docx
 
 # VS Code
 .vscode/
+.vs/
 
 # Windows
 Thumbs.db
