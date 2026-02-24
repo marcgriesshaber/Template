@@ -343,17 +343,19 @@ function Get-AllWorkItems {
     }
     
     foreach ($wi in $initialWorkItems) {
-        $allWorkItems[$wi.id] = $wi
+        $allWorkItems["$($wi.id)"] = $wi
     }
 
     # 4. Rekursives Abrufen der übergeordneten Elemente (bis zur EPIC-Ebene)
+    # Hinweis: Schlüssel werden als String gespeichert, da PS7 JSON-Integer als Int64 parsed,
+    # [int]-Cast aber Int32 liefert – unterschiedliche Typen scheitern sonst bei ContainsKey.
     $toProcessIds = @()
     foreach ($wi in $initialWorkItems) {
         if ($wi.Relations) {
             $parentRelations = $wi.Relations | Where-Object { $_.rel -eq "System.LinkTypes.Hierarchy-Reverse" }
             foreach ($parent in $parentRelations) {
                 $parentId = [int]($parent.url.Split('/')[-1])
-                if (-not $allWorkItems.ContainsKey($parentId)) {
+                if (-not $allWorkItems.ContainsKey("$parentId")) {
                     $toProcessIds += $parentId
                 }
             }
@@ -365,14 +367,14 @@ function Get-AllWorkItems {
         $parentWorkItems = Get-WorkItemDetails -Ids $uniqueIds -ServerUrl $ServerUrl -Project $Project -Headers $Headers
         if ($parentWorkItems -eq $null) { break }
         foreach ($wi in $parentWorkItems) {
-            if (-not $allWorkItems.ContainsKey($wi.id)) {
-                $allWorkItems[$wi.id] = $wi
+            if (-not $allWorkItems.ContainsKey("$($wi.id)")) {
+                $allWorkItems["$($wi.id)"] = $wi
                 Write-Log "Elternelement abgerufen: Typ=$($wi.fields.'System.WorkItemType'), Titel=$($wi.fields.'System.Title')"
                 if ($wi.fields.'System.WorkItemType' -ne "Epic" -and $wi.Relations) {
                     $parentRels = $wi.Relations | Where-Object { $_.rel -eq "System.LinkTypes.Hierarchy-Reverse" }
                     foreach ($parent in $parentRels) {
                         $parentId = [int]($parent.url.Split('/')[-1])
-                        if (-not $allWorkItems.ContainsKey($parentId)) {
+                        if (-not $allWorkItems.ContainsKey("$parentId")) {
                             $toProcessIds += $parentId
                         }
                     }
@@ -391,7 +393,8 @@ function Build-Hierarchy {
     )
     $workItemsById = @{}
     foreach ($wi in $WorkItems) {
-        $workItemsById[$wi.id] = $wi
+        # String-Schlüssel: verhindert Int32/Int64-Mismatch in PS7
+        $workItemsById["$($wi.id)"] = $wi
     }
     foreach ($wi in $WorkItems) {
         $wi | Add-Member -MemberType NoteProperty -Name Children -Value @() -Force
@@ -403,8 +406,8 @@ function Build-Hierarchy {
             $parentRels = $wi.Relations | Where-Object { $_.rel -eq "System.LinkTypes.Hierarchy-Reverse" }
             foreach ($parent in $parentRels) {
                 $parentId = [int]($parent.url.Split('/')[-1])
-                if ($workItemsById.ContainsKey($parentId)) {
-                    $workItemsById[$parentId].Children += $wi
+                if ($workItemsById.ContainsKey("$parentId")) {
+                    $workItemsById["$parentId"].Children += $wi
                     $isChild = $true
                 }
             }
@@ -425,17 +428,18 @@ function Filter-Tree {
     $filteredNodes = @()
     foreach ($node in $Nodes) {
         # 1. Rekursives Filtern der Kinder
-        if ($node.Children -and $node.Children.Count -gt 0) {
-            $node.Children = Filter-Tree -Nodes $node.Children
+        # @() sichert ab, dass einzelne Rückgabewerte nicht zu einem Skalar "unrolled" werden
+        if (@($node.Children).Count -gt 0) {
+            $node.Children = @(Filter-Tree -Nodes $node.Children)
         }
 
         # 2. Features ohne Kinder entfernen
-        if (($node.fields.'System.WorkItemType' -eq "Feature") -and ($node.Children.Count -eq 0)) {
+        if (($node.fields.'System.WorkItemType' -eq "Feature") -and (@($node.Children).Count -eq 0)) {
             Write-Log "Feature $($node.id) ohne Kinder wird entfernt."
             continue
         }
         # 3. Epics ohne Kinder entfernen
-        if (($node.fields.'System.WorkItemType' -eq "Epic") -and ($node.Children.Count -eq 0)) {
+        if (($node.fields.'System.WorkItemType' -eq "Epic") -and (@($node.Children).Count -eq 0)) {
             Write-Log "Epic $($node.id) ohne Kinder wird entfernt."
             continue
         }
@@ -520,6 +524,61 @@ function Format-ReleaseNotes {
 
 
 # -----------------------------
+# Hilfsfunktion: Überschriften-Tags in Beschreibungen durch fette Absätze ersetzen
+# (verhindert, dass Azure DevOps-Beschreibungen als Word-Überschriften formatiert werden)
+function Sanitize-HtmlContent {
+    param ([string]$Html)
+    if ([string]::IsNullOrEmpty($Html)) { return $Html }
+
+    # 1) h1-h6 -> <p><strong> (case-insensitiv)
+    $Html = [regex]::Replace($Html, '(?i)<h[1-6](\s[^>]*)?>', '<p data-custom-style="Normal"><strong>')
+    $Html = [regex]::Replace($Html, '(?i)</h[1-6]>', '</strong></p>')
+
+    # 2) <div>bare text</div> -> <p data-custom-style="Normal">text</p>
+    #    (DevOps speichert Beschreibungen manchmal ohne <p>-Tags direkt in <div>)
+    $Html = [regex]::Replace($Html, '(?i)<div(\s[^>]*)?>([^<]+)</div>', '<p data-custom-style="Normal">$2</p>')
+
+    # 3) Alle <p>-Tags ohne data-custom-style erhalten explizit "Normal",
+    #    damit Pandoc sie nicht als Heading-Fortsetzung rendert
+    $Html = [regex]::Replace($Html, '(?i)<p(?!\s[^>]*data-custom-style)(\s[^>]*)?>', '<p data-custom-style="Normal">')
+
+    return $Html
+}
+
+# -----------------------------
+# Hilfsfunktion: Bilder aus DevOps-URLs als Base64 in HTML einbetten
+# (Pandoc kann authentifizierungspflichtige URLs nicht abrufen)
+function Embed-ImagesAsBase64 {
+    param (
+        [string]$Html,
+        [hashtable]$Headers
+    )
+    if ([string]::IsNullOrEmpty($Html)) { return $Html }
+    $imgMatches = [regex]::Matches($Html, '(?i)(<img[^>]*\ssrc=")(https://dev\.azure\.com[^"]+)("[^>]*>)')
+    foreach ($match in $imgMatches) {
+        $prefix  = $match.Groups[1].Value
+        $src     = $match.Groups[2].Value
+        $suffix  = $match.Groups[3].Value
+        try {
+            $response = Invoke-WebRequest -Uri $src -Headers $Headers -Method Get -ErrorAction Stop
+            $mime = "image/png"
+            $ct = $response.Headers['Content-Type']
+            if ($ct) {
+                $ctStr = if ($ct -is [array]) { $ct[0] } else { $ct }
+                $mime = ($ctStr -split ';')[0].Trim()
+            }
+            $base64  = [Convert]::ToBase64String($response.Content)
+            $newTag  = "${prefix}data:${mime};base64,${base64}${suffix}"
+            $Html    = $Html.Replace($match.Value, $newTag)
+            Write-Log "Bild eingebettet: $src"
+        } catch {
+            Write-Log "Bild konnte nicht eingebettet werden: $src – $($_.Exception.Message)"
+        }
+    }
+    return $Html
+}
+
+# -----------------------------
 # Neue Funktion: Formatierung der Release Notes als HTML (ohne Styling)
 function Format-ReleaseNotesHTML {
     param (
@@ -539,46 +598,47 @@ function Format-ReleaseNotesHTML {
         $type = $item.fields.'System.WorkItemType'
         
         if ($type -ieq "Product Backlog Item") {
-            # PBIs erhalten die Formatvorlage "PBI" und beginnen mit "Item:"
-            $headerContent = "Item: $title ($id)"
-            $html += "<p style=""mso-style-name:'PBI';"">$headerContent</p>`n"
+            $headerContent = "$currentNumber Item: $title ($id)"
+            $html += "<h3 data-custom-style=""Heading 3"">$headerContent</h3>`n"
         }
         elseif ($type -ieq "Bug") {
-            # Bugs erhalten die Formatvorlage "Bug" und beginnen mit "Fehler:"
-            $headerContent = "Fehler: $title ($id)"
-            $html += "<p style=""mso-style-name:'Bug';"">$headerContent</p>`n"
+            $headerContent = "$currentNumber Fehler: $title ($id)"
+            $html += "<h4 data-custom-style=""Heading 4"">$headerContent</h4>`n"
+        }
+        elseif ($type -ieq "Epic") {
+            $headerContent = "$currentNumber $title ($id)"
+            $html += "<h1 data-custom-style=""Heading 1"">$headerContent</h1>`n"
+        }
+        elseif ($type -ieq "Feature") {
+            $headerContent = "$currentNumber $title ($id)"
+            $html += "<h2 data-custom-style=""Heading 2"">$headerContent</h2>`n"
         }
         else {
-            switch ($type) {
-                "Epic"    { $headerTag = "h2" }
-                "Feature" { $headerTag = "h3" }
-                default   { 
-                    $headerLevel = $Level + 1
-                    if ($headerLevel -gt 6) { $headerLevel = 6 }
-                    $headerTag = "h$headerLevel" 
-                }
-            }
+            $headerLevel = $Level + 1
+            if ($headerLevel -gt 6) { $headerLevel = 6 }
+            $headerTag = "h$headerLevel"
             $headerContent = "$currentNumber $title ($id)"
             $html += "<$headerTag>$headerContent</$headerTag>`n"
         }
         
         # Ausgabe der Beschreibungen oder Reproduktionsschritte
+        # data-custom-style='Normal' erzwingt in Pandoc den Fließtext-Stil (nicht Heading)
         if ($type -ieq "Product Backlog Item") {
             if ($item.fields.'System.Description') {
-                $desc = $item.fields.'System.Description'
-                $html += "<p>$desc</p>`n"
+                $desc = Sanitize-HtmlContent $item.fields.'System.Description'
+                $html += "<div data-custom-style='Normal'>$desc</div>`n"
             }
         }
         elseif ($type -ieq "Bug") {
             if ($item.fields.'Microsoft.VSTS.TCM.ReproSteps') {
-                $steps = $item.fields.'Microsoft.VSTS.TCM.ReproSteps'
-                $html += "<p>$steps</p>`n"
+                $steps = Sanitize-HtmlContent $item.fields.'Microsoft.VSTS.TCM.ReproSteps'
+                $html += "<div data-custom-style='Normal'>$steps</div>`n"
             }
         }
         else {
-            if (($item.Children.Count -eq 0) -and $item.fields.'System.Description') {
-                $desc = $item.fields.'System.Description'
-                $html += "<p>$desc</p>`n"
+            if ((@($item.Children).Count -eq 0) -and $item.fields.'System.Description') {
+                $desc = Sanitize-HtmlContent $item.fields.'System.Description'
+                $html += "<div data-custom-style='Normal'>$desc</div>`n"
             }
         }
         
@@ -691,26 +751,19 @@ if (Test-Path $TemplatePath) {
 }
 
 # -----------------------------
-# Neuer Block: Erzeuge Word-Dokument (DOCX) aus den Markdown Release Notes mit Pandoc
-if (Get-Command pandoc -ErrorAction SilentlyContinue) {
-    $OutputPathWord = $OutputPath -replace "\.md$", ".docx"
-    & pandoc $OutputPath -o $OutputPathWord
-    Write-Log "Word Release Notes gespeichert unter '$OutputPathWord'."
-} else {
-    Write-Log "Pandoc ist nicht installiert, daher wird kein Word-Dokument erzeugt."
-}
-
-# -----------------------------
 # Erzeuge HTML-Inhalt
 if ($BuildIdArray.Count -gt 0) {
     $buildList = $BuildIdArray -join ', '
-    $htmlHeader = "<html><head><meta charset='utf-8'></head><body><h1>Release Notes für Builds $buildList</h1>`n"
+    $htmlHeader = "<html><head><meta charset='utf-8'></head><body><p data-custom-style='Title'>Release Notes für Builds $buildList</p>`n"
 } else {
-    $htmlHeader = "<html><head><meta charset='utf-8'></head><body><h1>Release Notes (Tags: $($IncludeTagsArray -join ', '))</h1>`n"
+    $htmlHeader = "<html><head><meta charset='utf-8'></head><body><p data-custom-style='Title'>Release Notes (Tags: $($IncludeTagsArray -join ', '))</p>`n"
 }
 $htmlBody = Format-ReleaseNotesHTML -HierarchyItems $hierarchyRoots -ServerUrl $ServerUrl -Project $Project
 $htmlFooter = "</body></html>"
 $fullHtmlContent = $htmlHeader + $htmlBody + "`n" + $htmlFooter
+
+# Bilder aus DevOps-Attachments als Base64 einbetten (Pandoc kann keine auth. URLs laden)
+$fullHtmlContent = Embed-ImagesAsBase64 -Html $fullHtmlContent -Headers $headers
 
 # Bestimme den HTML-Ausgabepfad (z.B. ReleaseNotes.html statt ReleaseNotes.md)
 if ($OutputPath -match "\.md$") {
@@ -720,5 +773,16 @@ if ($OutputPath -match "\.md$") {
 }
 $fullHtmlContent | Out-File -FilePath $OutputPathHtml -Encoding UTF8
 Write-Log "HTML Release Notes gespeichert unter '$OutputPathHtml'."
+
+# -----------------------------
+# Erzeuge Word-Dokument (DOCX) aus den HTML Release Notes mit Pandoc
+# HTML als Quelle verwenden, damit Formatierungen (Listen, Fettdruck, Bilder etc.) erhalten bleiben
+if (Get-Command pandoc -ErrorAction SilentlyContinue) {
+    $OutputPathWord = $OutputPath -replace "\.md$", ".docx"
+    & pandoc $OutputPathHtml --from=html --to=docx -o $OutputPathWord
+    Write-Log "Word Release Notes gespeichert unter '$OutputPathWord'."
+} else {
+    Write-Log "Pandoc ist nicht installiert, daher wird kein Word-Dokument erzeugt."
+}
 
 
