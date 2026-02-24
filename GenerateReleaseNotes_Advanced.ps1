@@ -551,28 +551,46 @@ function Sanitize-HtmlContent {
 function Embed-ImagesAsBase64 {
     param (
         [string]$Html,
-        [hashtable]$Headers
+        [hashtable]$Headers,
+        [string]$ServerUrl = ""
     )
     if ([string]::IsNullOrEmpty($Html)) { return $Html }
-    $imgMatches = [regex]::Matches($Html, '(?i)(<img[^>]*\ssrc=")(https://dev\.azure\.com[^"]+)("[^>]*>)')
-    foreach ($match in $imgMatches) {
-        $prefix  = $match.Groups[1].Value
-        $src     = $match.Groups[2].Value
-        $suffix  = $match.Groups[3].Value
-        try {
-            $response = Invoke-WebRequest -Uri $src -Headers $Headers -Method Get -ErrorAction Stop
-            $mime = "image/png"
-            $ct = $response.Headers['Content-Type']
-            if ($ct) {
-                $ctStr = if ($ct -is [array]) { $ct[0] } else { $ct }
-                $mime = ($ctStr -split ';')[0].Trim()
+
+    # URL-Pattern: Azure DevOps Cloud (dev.azure.com + legacy visualstudio.com) + optionaler On-Premise-Server
+    $urlAlts = @("https://dev\.azure\.com", "https?://[^/\s]+\.visualstudio\.com")
+    if (-not [string]::IsNullOrEmpty($ServerUrl)) {
+        $urlAlts += [regex]::Escape($ServerUrl.TrimEnd('/'))
+    }
+    $urlPattern = "(?:" + ($urlAlts -join "|") + ")"
+
+    # Beide Anführungszeichen-Varianten abdecken (src="..." und src='...')
+    $dq = [char]34  # "
+    $sq = [char]39  # '
+    $patterns = @(
+        "(?i)(<img\b[^>]*?\ssrc=$dq)($urlPattern[^$dq]+)($dq[^>]*?>)",
+        "(?i)(<img\b[^>]*?\ssrc=$sq)($urlPattern[^$sq]+)($sq[^>]*?>)"
+    )
+
+    foreach ($pattern in $patterns) {
+        $imgMatches = [regex]::Matches($Html, $pattern)
+        foreach ($match in $imgMatches) {
+            $prefix = $match.Groups[1].Value
+            $src    = $match.Groups[2].Value
+            $suffix = $match.Groups[3].Value
+            try {
+                $response = Invoke-WebRequest -Uri $src -Headers $Headers -Method Get -UseBasicParsing -ErrorAction Stop
+                $mime = "image/png"
+                $ct = $response.Headers['Content-Type']
+                if ($ct) {
+                    $ctStr = if ($ct -is [array]) { $ct[0] } else { $ct }
+                    $mime = ($ctStr -split ';')[0].Trim()
+                }
+                $base64 = [Convert]::ToBase64String($response.Content)
+                $Html = $Html.Replace($match.Value, "${prefix}data:${mime};base64,${base64}${suffix}")
+                Write-Log "Bild eingebettet: $src"
+            } catch {
+                Write-Log "Bild konnte nicht eingebettet werden: $src – $($_.Exception.Message)"
             }
-            $base64  = [Convert]::ToBase64String($response.Content)
-            $newTag  = "${prefix}data:${mime};base64,${base64}${suffix}"
-            $Html    = $Html.Replace($match.Value, $newTag)
-            Write-Log "Bild eingebettet: $src"
-        } catch {
-            Write-Log "Bild konnte nicht eingebettet werden: $src – $($_.Exception.Message)"
         }
     }
     return $Html
@@ -763,7 +781,7 @@ $htmlFooter = "</body></html>"
 $fullHtmlContent = $htmlHeader + $htmlBody + "`n" + $htmlFooter
 
 # Bilder aus DevOps-Attachments als Base64 einbetten (Pandoc kann keine auth. URLs laden)
-$fullHtmlContent = Embed-ImagesAsBase64 -Html $fullHtmlContent -Headers $headers
+$fullHtmlContent = Embed-ImagesAsBase64 -Html $fullHtmlContent -Headers $headers -ServerUrl $ServerUrl
 
 # Bestimme den HTML-Ausgabepfad (z.B. ReleaseNotes.html statt ReleaseNotes.md)
 if ($OutputPath -match "\.md$") {
@@ -777,9 +795,27 @@ Write-Log "HTML Release Notes gespeichert unter '$OutputPathHtml'."
 # -----------------------------
 # Erzeuge Word-Dokument (DOCX) aus den HTML Release Notes mit Pandoc
 # HTML als Quelle verwenden, damit Formatierungen (Listen, Fettdruck, Bilder etc.) erhalten bleiben
-if (Get-Command pandoc -ErrorAction SilentlyContinue) {
+
+# Pandoc suchen: zuerst im PATH, dann in bekannten WinGet/Portable-Pfaden
+$pandocCmd = Get-Command pandoc -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+if (-not $pandocCmd) {
+    $pandocSearchPaths = @(
+        "$env:LOCALAPPDATA\Microsoft\WinGet\Packages",
+        "$env:LOCALAPPDATA\Pandoc",
+        "$env:ProgramFiles\Pandoc",
+        "${env:ProgramFiles(x86)}\Pandoc"
+    )
+    foreach ($searchPath in $pandocSearchPaths) {
+        if (Test-Path $searchPath) {
+            $found = Get-ChildItem -Path $searchPath -Filter "pandoc.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+            if ($found) { $pandocCmd = $found; break }
+        }
+    }
+}
+
+if ($pandocCmd) {
     $OutputPathWord = $OutputPath -replace "\.md$", ".docx"
-    & pandoc $OutputPathHtml --from=html --to=docx -o $OutputPathWord
+    & $pandocCmd $OutputPathHtml --from=html --to=docx -o $OutputPathWord
     Write-Log "Word Release Notes gespeichert unter '$OutputPathWord'."
 } else {
     Write-Log "Pandoc ist nicht installiert, daher wird kein Word-Dokument erzeugt."
