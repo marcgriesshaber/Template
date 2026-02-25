@@ -51,7 +51,7 @@ Dieses PowerShell-Skript generiert professionelle Release Notes aus Azure DevOps
 1. **Skript herunterladen**
 
    ```powershell
-   # Klonen Sie das Repository oder laden Sie GenerateReleaseNotes.ps1 herunter
+   # Klonen Sie das Repository oder laden Sie GenerateReleaseNotes_Advanced.ps1 herunter
    git clone https://github.com/marcgriesshaber/Template.git
    cd Template
    ```
@@ -131,7 +131,7 @@ https://dev.azure.com/IhreOrg/IhrProjekt/_...
 **Beispiel 1 - Mit Build-ID:**
 ```powershell
 # Passen Sie die Werte an:
-.\GenerateReleaseNotes.ps1 `
+.\GenerateReleaseNotes_Advanced.ps1 `
     -ServerUrl "https://dev.azure.com/IhreOrganisation/" `
     -Project "IhrProjekt" `
     -BuildIds "1234" `
@@ -140,7 +140,7 @@ https://dev.azure.com/IhreOrg/IhrProjekt/_...
 
 **Beispiel 2 - Mit Tags:**
 ```powershell
-.\GenerateReleaseNotes.ps1 `
+.\GenerateReleaseNotes_Advanced.ps1 `
     -ServerUrl "https://dev.azure.com/IhreOrganisation/" `
     -Project "IhrProjekt" `
     -IncludeTags "Release" `
@@ -267,12 +267,37 @@ Das Skript erstellt im gleichen Verzeichnis:
   # Erstellt auch: Sprint42_ReleaseNotes.html und Sprint42_ReleaseNotes.docx
   ```
 
+#### `IncludeNumbering` (Optional)
+- **Was**: Aktiviert hierarchische Nummerierung in den Überschriften (z.B. "1.2.3")
+- **Werte**: `$true` oder `$false`
+- **Standard**: `$false` (keine Nummerierung)
+- **Beispiel**: 
+  ```powershell
+  -IncludeNumbering $true
+  ```
+
+#### `ItemPrefix` (Optional)
+- **Was**: Präfix-Text, der vor dem Titel eines Product Backlog Items eingefügt wird
+- **Standard**: `""` (kein Präfix)
+- **Beispiel**: 
+  ```powershell
+  -ItemPrefix "US: "   # Ergibt z.B.: "#### US: Mein PBI (123)"
+  ```
+
+#### `BugPrefix` (Optional)
+- **Was**: Präfix-Text, der vor dem Titel eines Bugs eingefügt wird
+- **Standard**: `""` (kein Präfix)
+- **Beispiel**: 
+  ```powershell
+  -BugPrefix "Fehler: "   # Ergibt z.B.: "##### Fehler: Mein Bug (456)"
+  ```
+
 ### 🔄 Kombinierte Parameter-Beispiele
 
 #### Beispiel 1: Nur Build-basiert
 ```powershell
 # Holt alle Work Items von Build 1234
-.\GenerateReleaseNotes.ps1 `
+.\GenerateReleaseNotes_Advanced.ps1 `
     -ServerUrl "https://dev.azure.com/MeineOrg/" `
     -Project "MeinProjekt" `
     -BuildIds "1234" `
@@ -282,7 +307,7 @@ Das Skript erstellt im gleichen Verzeichnis:
 #### Beispiel 2: Nur Tag-basiert (OR)
 ```powershell
 # Holt Work Items mit Tag "Release" ODER "Hotfix"
-.\GenerateReleaseNotes.ps1 `
+.\GenerateReleaseNotes_Advanced.ps1 `
     -ServerUrl "https://dev.azure.com/MeineOrg/" `
     -Project "MeinProjekt" `
     -IncludeTags "Release,Hotfix" `
@@ -293,7 +318,7 @@ Das Skript erstellt im gleichen Verzeichnis:
 #### Beispiel 3: Nur Tag-basiert (AND)
 ```powershell
 # Holt Work Items mit Tag "Release" UND "Approved"
-.\GenerateReleaseNotes.ps1 `
+.\GenerateReleaseNotes_Advanced.ps1 `
     -ServerUrl "https://dev.azure.com/MeineOrg/" `
     -Project "MeinProjekt" `
     -IncludeTags "Release,Approved" `
@@ -304,7 +329,7 @@ Das Skript erstellt im gleichen Verzeichnis:
 #### Beispiel 4: Build mit Tag-Filter
 ```powershell
 # Holt Work Items von Build 1234, aber nur die mit Tag "Release"
-.\GenerateReleaseNotes.ps1 `
+.\GenerateReleaseNotes_Advanced.ps1 `
     -ServerUrl "https://dev.azure.com/MeineOrg/" `
     -Project "MeinProjekt" `
     -BuildIds "1234" `
@@ -315,7 +340,7 @@ Das Skript erstellt im gleichen Verzeichnis:
 #### Beispiel 5: Mit Ausschluss-Tags
 ```powershell
 # Holt Work Items mit "Release", aber schließt "Internal" und "Draft" aus
-.\GenerateReleaseNotes.ps1 `
+.\GenerateReleaseNotes_Advanced.ps1 `
     -ServerUrl "https://dev.azure.com/MeineOrg/" `
     -Project "MeinProjekt" `
     -IncludeTags "Release" `
@@ -326,7 +351,7 @@ Das Skript erstellt im gleichen Verzeichnis:
 #### Beispiel 6: Mehrere Builds mit Filter
 ```powershell
 # Holt Work Items von 3 Builds, filtert nach "Release", schließt "KRN" aus
-.\GenerateReleaseNotes.ps1 `
+.\GenerateReleaseNotes_Advanced.ps1 `
     -ServerUrl "https://dev.azure.com/MeineOrg/" `
     -Project "MeinProjekt" `
     -BuildIds "1234,1235,1236" `
@@ -338,7 +363,7 @@ Das Skript erstellt im gleichen Verzeichnis:
 #### Beispiel 7: Mit Template und Custom Output
 ```powershell
 # Vollständiges Beispiel mit allen Optionen
-.\GenerateReleaseNotes.ps1 `
+.\GenerateReleaseNotes_Advanced.ps1 `
     -ServerUrl "https://dev.azure.com/MeineOrg/" `
     -Project "MeinProjekt" `
     -IncludeTags "Sprint42,Release" `
@@ -364,7 +389,7 @@ Das Skript erstellt im gleichen Verzeichnis:
 $env:AZURE_DEVOPS_PAT = "IHREN_TOKEN_HIER"
 
 # 2. Verwenden
-.\GenerateReleaseNotes.ps1 `
+.\GenerateReleaseNotes_Advanced.ps1 `
     -ServerUrl "https://dev.azure.com/MeineOrg/" `
     -Project "MeinProjekt" `
     -IncludeTags "Release" `
@@ -389,7 +414,7 @@ $project = ($secretsContent | Select-String "Project: (.+)").Matches.Groups[1].V
 $pat = ($secretsContent | Select-String "PAT: (.+)").Matches.Groups[1].Value
 
 # 4. Verwende sie
-.\GenerateReleaseNotes.ps1 `
+.\GenerateReleaseNotes_Advanced.ps1 `
     -ServerUrl $serverUrl `
     -Project $project `
     -IncludeTags "Release" `
@@ -403,7 +428,7 @@ $pat = ($secretsContent | Select-String "PAT: (.+)").Matches.Groups[1].Value
 #### 1. Build-basierte Release Notes
 
 ```powershell
-.\GenerateReleaseNotes.ps1 `
+.\GenerateReleaseNotes_Advanced.ps1 `
     -ServerUrl "http://meinserver:8080/tfs/DefaultCollection" `
     -Project "MeinProjekt" `
     -BuildIds "1234,1235,1236" `
@@ -413,7 +438,7 @@ $pat = ($secretsContent | Select-String "PAT: (.+)").Matches.Groups[1].Value
 #### 2. Tag-basierte Release Notes
 
 ```powershell
-.\GenerateReleaseNotes.ps1 `
+.\GenerateReleaseNotes_Advanced.ps1 `
     -ServerUrl "http://meinserver:8080/tfs/DefaultCollection" `
     -Project "MeinProjekt" `
     -IncludeTags "Release,v2.0" `
@@ -424,7 +449,7 @@ $pat = ($secretsContent | Select-String "PAT: (.+)").Matches.Groups[1].Value
 #### 3. Build mit Tag-Filter
 
 ```powershell
-.\GenerateReleaseNotes.ps1 `
+.\GenerateReleaseNotes_Advanced.ps1 `
     -ServerUrl "http://meinserver:8080/tfs/DefaultCollection" `
     -Project "MeinProjekt" `
     -BuildIds "1234" `
@@ -438,7 +463,7 @@ $pat = ($secretsContent | Select-String "PAT: (.+)").Matches.Groups[1].Value
 #### Mit Template und Custom Output
 
 ```powershell
-.\GenerateReleaseNotes.ps1 `
+.\GenerateReleaseNotes_Advanced.ps1 `
     -ServerUrl "http://meinserver:8080/tfs/DefaultCollection" `
     -Project "MeinProjekt" `
     -IncludeTags "Sprint42" `
@@ -454,7 +479,7 @@ steps:
 - task: PowerShell@2
   displayName: 'Generate Release Notes'
   inputs:
-    filePath: '$(Build.SourcesDirectory)/GenerateReleaseNotes.ps1'
+    filePath: '$(Build.SourcesDirectory)/GenerateReleaseNotes_Advanced.ps1'
     arguments: >
       -ServerUrl "$(System.CollectionUri)"
       -Project "$(System.TeamProject)"
@@ -477,6 +502,9 @@ steps:
 | `Pat` | String | Nein | $env:SYSTEM_ACCESSTOKEN | Personal Access Token für Authentifizierung |
 | `TemplatePath` | String | Nein | "Template.md" | Pfad zur Template-Datei |
 | `OutputPath` | String | Nein | "ReleaseNotes.md" | Pfad für die Ausgabedatei |
+| `IncludeNumbering` | Bool | Nein | `$false` | Hierarchische Nummerierung der Überschriften einschalten (z.B. "1.2.3") |
+| `ItemPrefix` | String | Nein | `""` | Präfix-Text vor dem Titel eines Product Backlog Items (z.B. "US: ") |
+| `BugPrefix` | String | Nein | `""` | Präfix-Text vor dem Titel eines Bugs (z.B. "Fehler: ") |
 
 ## 📝 Template-Format
 
@@ -507,11 +535,11 @@ Veröffentlichungsdatum: $(Get-Date -Format "dd.MM.yyyy")
 
 ### 1.1 Performance verbessern (124)
 
-#### 1.1.1 Item: Datenbank-Indizes hinzufügen (125)
+#### 1.1.1 Datenbank-Indizes hinzufügen (125)
 
 Beschreibung des Work Items...
 
-##### 1.1.1.1 Fehler: Timeout bei großen Abfragen (126)
+##### 1.1.1.1 Timeout bei großen Abfragen (126)
 
 Reproduktionsschritte...
 ```
@@ -520,8 +548,8 @@ Reproduktionsschritte...
 
 - **Epic**: `## Überschrift 2`
 - **Feature**: `### Überschrift 3`
-- **Product Backlog Item**: `#### Überschrift 4` (mit "Item:" Präfix)
-- **Bug**: `##### Überschrift 5` (mit "Fehler:" Präfix)
+- **Product Backlog Item**: `#### Überschrift 4` (optionaler `ItemPrefix`)
+- **Bug**: `##### Überschrift 5` (optionaler `BugPrefix`)
 
 ## 🔍 Filterlogik
 
@@ -572,9 +600,9 @@ Reproduktionsschritte...
 # 2. Stimmen die Tag-Namen exakt?
 # 3. Hat der PAT die richtigen Berechtigungen?
 
-# Debug-Ausgabe aktivieren
-$VerbosePreference = "Continue"
-.\GenerateReleaseNotes.ps1 -Verbose ...
+# Das Skript gibt automatisch Zeitstempel-Logs über Write-Host aus.
+# Eine separate -Verbose-Unterstützung ist nicht implementiert.
+.\GenerateReleaseNotes_Advanced.ps1 ...
 ```
 
 ### "Pandoc ist nicht installiert"
@@ -635,5 +663,5 @@ steps:
 ---
 
 **Version:** 1.0  
-**Letztes Update:** November 2025
+**Letztes Update:** Februar 2026
 
