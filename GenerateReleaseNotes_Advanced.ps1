@@ -41,6 +41,18 @@
 .PARAMETER OutputPath
   Der Dateipfad, wo die generierten Release Notes gespeichert werden sollen, z. B. "C:\Ausgabe\ReleaseNotes.md".
 
+.PARAMETER IncludeNumbering
+  Gibt an, ob Work Items in den Überschriften mit einer hierarchischen Nummerierung versehen werden sollen (z. B. "1.2.3").
+  Standard: $false (keine Nummerierung).
+
+.PARAMETER ItemPrefix
+  Präfix-Text, der in den Überschriften vor dem Titel eines Product Backlog Items angezeigt wird (z. B. "Item: ").
+  Standard: leer (kein Präfix).
+
+.PARAMETER BugPrefix
+  Präfix-Text, der in den Überschriften vor dem Titel eines Bugs angezeigt wird (z. B. "Fehler: ").
+  Standard: leer (kein Präfix).
+
 .EXAMPLE
   .\GenerateReleaseNotes.ps1 -ServerUrl "http://meinserver:8080/tfs/DefaultCollection" -Project "meinProjekt" -BuildId 1234 -IncludeTags "Release,Sprint5" -Pat "DEIN_PAT_HIER" -TemplatePath "C:\Templates\ReleaseTemplate.md" -OutputPath "C:\Ausgabe\ReleaseNotes.md"
 
@@ -75,7 +87,16 @@ param(
     [string]$TemplatePath,
     
     [Parameter(Mandatory=$false)]
-    [string]$OutputPath
+    [string]$OutputPath,
+
+    [Parameter(Mandatory=$false)]
+    [bool]$IncludeNumbering = $false,
+
+    [Parameter(Mandatory=$false)]
+    [string]$ItemPrefix = "",
+
+    [Parameter(Mandatory=$false)]
+    [string]$BugPrefix = ""
 )
 
 # Setze Standardwerte nach der param-Deklaration
@@ -84,6 +105,8 @@ if ([string]::IsNullOrEmpty($BuildIds)) { $BuildIds = "" }
 if ([string]::IsNullOrEmpty($IncludeTags)) { $IncludeTags = "" }
 if ([string]::IsNullOrEmpty($TagOperator)) { $TagOperator = "OR" }
 if ([string]::IsNullOrEmpty($ExcludeTags)) { $ExcludeTags = "" }
+if ($null -eq $ItemPrefix) { $ItemPrefix = "" }
+if ($null -eq $BugPrefix) { $BugPrefix = "" }
 
 # Stelle sicher, dass TLS 1.2 verwendet wird
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -457,7 +480,10 @@ function Format-ReleaseNotes {
         [string]$Prefix = "",
         [int]$Level = 1,
         [string]$ServerUrl,
-        [string]$Project
+        [string]$Project,
+        [bool]$IncludeNumbering = $false,
+        [string]$ItemPrefix = "",
+        [string]$BugPrefix = ""
     )
     $notes = ""
     $counter = 1
@@ -478,14 +504,16 @@ function Format-ReleaseNotes {
             default                 { $headerPrefix = ("#" * ($Level + 1)) + " " }
         }
 
+        $numberPrefix = if ($IncludeNumbering) { "$currentNumber " } else { "" }
+
         if ($type -ieq "Product Backlog Item") {
-            $headerLine = "$headerPrefix $currentNumber Item: $title ($id)"
+            $headerLine = "$headerPrefix ${numberPrefix}${ItemPrefix}$title ($id)"
         }
         elseif ($type -ieq "Bug") {
-            $headerLine = "$headerPrefix $currentNumber Fehler: $title ($id)"
+            $headerLine = "$headerPrefix ${numberPrefix}${BugPrefix}$title ($id)"
         }
         else {
-            $headerLine = "$headerPrefix $currentNumber $title ($id)"
+            $headerLine = "$headerPrefix ${numberPrefix}$title ($id)"
         }
 
         $notes += $headerLine + "`n`n"
@@ -516,7 +544,7 @@ function Format-ReleaseNotes {
                     default                 { 5 }
                 }
             }
-            $notes += Format-ReleaseNotes -HierarchyItems $sortedChildren -Prefix $currentNumber -Level ($Level + 1) -ServerUrl $ServerUrl -Project $Project
+            $notes += Format-ReleaseNotes -HierarchyItems $sortedChildren -Prefix $currentNumber -Level ($Level + 1) -ServerUrl $ServerUrl -Project $Project -IncludeNumbering $IncludeNumbering -ItemPrefix $ItemPrefix -BugPrefix $BugPrefix
         }
     }
     return $notes
@@ -604,7 +632,10 @@ function Format-ReleaseNotesHTML {
         [string]$Prefix = "",
         [int]$Level = 1,
         [string]$ServerUrl,
-        [string]$Project
+        [string]$Project,
+        [bool]$IncludeNumbering = $false,
+        [string]$ItemPrefix = "",
+        [string]$BugPrefix = ""
     )
     $html = ""
     $counter = 1
@@ -614,28 +645,30 @@ function Format-ReleaseNotesHTML {
         $title = $item.fields.'System.Title'
         $id = $item.id
         $type = $item.fields.'System.WorkItemType'
-        
+
+        $numberPrefix = if ($IncludeNumbering) { "$currentNumber " } else { "" }
+
         if ($type -ieq "Product Backlog Item") {
-            $headerContent = "$currentNumber Item: $title ($id)"
+            $headerContent = "${numberPrefix}${ItemPrefix}$title ($id)"
             $html += "<h3 data-custom-style=""Heading 3"">$headerContent</h3>`n"
         }
         elseif ($type -ieq "Bug") {
-            $headerContent = "$currentNumber Fehler: $title ($id)"
+            $headerContent = "${numberPrefix}${BugPrefix}$title ($id)"
             $html += "<h4 data-custom-style=""Heading 4"">$headerContent</h4>`n"
         }
         elseif ($type -ieq "Epic") {
-            $headerContent = "$currentNumber $title ($id)"
+            $headerContent = "${numberPrefix}$title ($id)"
             $html += "<h1 data-custom-style=""Heading 1"">$headerContent</h1>`n"
         }
         elseif ($type -ieq "Feature") {
-            $headerContent = "$currentNumber $title ($id)"
+            $headerContent = "${numberPrefix}$title ($id)"
             $html += "<h2 data-custom-style=""Heading 2"">$headerContent</h2>`n"
         }
         else {
             $headerLevel = $Level + 1
             if ($headerLevel -gt 6) { $headerLevel = 6 }
             $headerTag = "h$headerLevel"
-            $headerContent = "$currentNumber $title ($id)"
+            $headerContent = "${numberPrefix}$title ($id)"
             $html += "<$headerTag>$headerContent</$headerTag>`n"
         }
         
@@ -671,7 +704,7 @@ function Format-ReleaseNotesHTML {
                     default                 { 5 }
                 }
             }
-            $html += Format-ReleaseNotesHTML -HierarchyItems $sortedChildren -Prefix $currentNumber -Level ($Level + 1) -ServerUrl $ServerUrl -Project $Project
+            $html += Format-ReleaseNotesHTML -HierarchyItems $sortedChildren -Prefix $currentNumber -Level ($Level + 1) -ServerUrl $ServerUrl -Project $Project -IncludeNumbering $IncludeNumbering -ItemPrefix $ItemPrefix -BugPrefix $BugPrefix
         }
     }
     return $html
@@ -755,7 +788,7 @@ if ($BuildIdArray.Count -gt 0) {
 } else {
     $headerContent = "# Release Notes (Tags: $($IncludeTagsArray -join ', '))`n`n"
 }
-$releaseNotesContent = Format-ReleaseNotes -HierarchyItems $hierarchyRoots -ServerUrl $ServerUrl -Project $Project
+$releaseNotesContent = Format-ReleaseNotes -HierarchyItems $hierarchyRoots -ServerUrl $ServerUrl -Project $Project -IncludeNumbering $IncludeNumbering -ItemPrefix $ItemPrefix -BugPrefix $BugPrefix
 $fullContent = $headerContent + $releaseNotesContent
 
 if (Test-Path $TemplatePath) {
@@ -776,7 +809,7 @@ if ($BuildIdArray.Count -gt 0) {
 } else {
     $htmlHeader = "<html><head><meta charset='utf-8'></head><body><p data-custom-style='Title'>Release Notes (Tags: $($IncludeTagsArray -join ', '))</p>`n"
 }
-$htmlBody = Format-ReleaseNotesHTML -HierarchyItems $hierarchyRoots -ServerUrl $ServerUrl -Project $Project
+$htmlBody = Format-ReleaseNotesHTML -HierarchyItems $hierarchyRoots -ServerUrl $ServerUrl -Project $Project -IncludeNumbering $IncludeNumbering -ItemPrefix $ItemPrefix -BugPrefix $BugPrefix
 $htmlFooter = "</body></html>"
 $fullHtmlContent = $htmlHeader + $htmlBody + "`n" + $htmlFooter
 
